@@ -1,0 +1,84 @@
+##  Printer Installation Package Example
+##
+##  Author:         Gary Larizza
+##  License:        Apache
+##  Created:        9/17/2011
+##  Last Modified:  9/17/2011 
+##
+##  Description:
+##
+##  This module will setup a printer and install a preconfigured .ppd file into
+##  the /etc/cups/ppd directory. A preflight script is used to actually install
+##  the printer, and the ppd file is simply copied over in the payload of
+##  the package. You will need to change the values in the preflight script
+##  to reflect your environment.
+##  
+##
+##  Creating your package:
+##
+##  Change to the directory containing this module and execute the following
+##  commands to build the resultant file:
+##
+##  'sudo rake pkg'  ==>  Builds a Package
+##  'sudo rake dmg'  ==>  Builds a DMG
+##  'sudo rake zip'  ==>  Builds a Zip file
+##
+
+require 'pathname'
+require 'fileutils'
+require "#{Pathname.pwd.parent.parent}/cart"
+
+task :default => :pkg
+raise "\n==========\nThis Rakefile must run as root\nRun \"sudo rake <task>\"\n==========" unless Process.uid == 0
+
+
+# Any variables that need to be changed should be done inside the customize
+# method
+def customize
+  @title                  = "Sample_Printer_Package"
+  @reverse_domain         = "com.anycorp"
+end
+
+# The pack method is for adding files to the package's payload. Note that
+# @working_tree['WORK_D'] is the path to the working directory. All files
+# installed into this directory will be copied into the package's payload.
+def pack
+  FileUtils.mkdir_p("#{@working_tree['WORK_D']}/etc/cups/ppd/")
+  safe_system("#{INSTALL} -m 0755 preflight #{@working_tree['SCRIPT_D']}")
+  safe_system("#{INSTALL} -m 0644 -o root -g _lp psm_HHS_Office_9040.ppd #{@working_tree['WORK_D']}/etc/cups/ppd/")
+end
+
+
+### Nothing Below this line should need to be modified ###
+
+
+desc "This task will create an Apple .pkg file"
+task :pkg do
+  customize
+  make_directory_tree
+  pack
+  output_file
+  build_package
+  copy_to_local_dir(@package_file)
+  announce("Your package #{@package_file} has been built!")
+end
+
+desc "This task will create an Apple .pkg encapsulated into a .dmg file"
+task :dmg do
+  customize
+  make_directory_tree
+  pack
+  output_file
+  build_dmg
+  announce("Your DMG #{@dmg_file} has been built!")
+end
+
+desc "This task will create a .zip file with your package in it."
+task :zip do
+  customize
+  make_directory_tree
+  pack
+  output_file
+  build_zip
+  announce("Your Zip file #{@zip_file} has been built!")
+end
