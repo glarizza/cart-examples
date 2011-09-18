@@ -87,7 +87,7 @@ def pack
   FileUtils.mkdir_p("#{@work}/Library/Ruby/Site/1.8/puppet")
   
   # Install necessary files
-  safe_system("sudo #{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/conf/auth.conf #{@work}/private/etc/puppet/auth.conf")
+  safe_system("#{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/conf/auth.conf #{@work}/private/etc/puppet/auth.conf")
   safe_system("#{DITTO} ./#{@puppet_file}/bin/ #{@work}/usr/bin")
   safe_system("#{DITTO} ./#{@puppet_file}/sbin/ #{@work}/usr/sbin")
   safe_system("#{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/man/man5/puppet.conf.5 #{@work}/usr/share/man/man5/")
@@ -96,7 +96,7 @@ def pack
   
   # Setup a preflight script and replace variables in the files with 
   # the correct paths.
-  safe_system("sudo #{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/conf/osx/preflight #{@working_tree['SCRIPT_D']}")
+  safe_system("#{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/conf/osx/preflight #{@working_tree['SCRIPT_D']}")
   safe_system("sed -i '' \"s\#{SITELIBDIR}\#/usr/lib/ruby/site_ruby/1.8\#g\" #{@working_tree['SCRIPT_D']}/preflight")
   safe_system("sed -i '' \"s\#{BINDIR}\#/usr/bin\#g\" #{@working_tree['SCRIPT_D']}/preflight")
    
