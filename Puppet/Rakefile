@@ -141,7 +141,7 @@ task :dmg do
   pack
   output_file
   build_dmg
-	announce("Your package #{@dmg_file} has been built!")
+  announce("Your DMG #{@dmg_file} has been built!")
 end
 
 desc "This task will create a .zip file with your package in it."
@@ -151,5 +151,5 @@ task :zip do
   pack
   output_file
   build_zip
-  announce("Your package #{@zip_file} has been built!")
+  announce("Your Zip file #{@zip_file} has been built!")
 end
