@@ -1,0 +1,155 @@
+##  Puppet Rakefile
+##
+##  Author:         Gary Larizza
+##  License:        Apache
+##  Created:        9/17/2011
+##  Last Modified:  9/17/2011 
+##
+##  Description:
+##
+##  This module will create a package based on the Puppet source. The puppet
+##  sourcefile is downloaded, expanded, and then copied into the Package's 
+##  root directory.  The customize method sets all the initial variable values
+##  that are needed for this module, and the pack method provides all the code 
+##  to copy and set permissions on all the files that need to be installed.
+##  You need to run this rakefile AS ROOT due to root:wheel permissions.
+##
+##
+##  Overriding Puppet Version:
+##
+##  We allow you to specify the version of Puppet you want to build from the 
+##  command line by doing the following:  'sudo PACKAGE_VERSION=2.6.9 rake pkg'
+##  Running that from the command line will tell this module to use version 
+##  2.6.9 of Puppet instead of the version specified in the Module. The 
+##  pattern for this behavior can be found in the customize method (the if
+##  statement checking ENV['PACKAGE_VERSION'])
+##  
+##
+##  Creating your package:
+##
+##  Change to the directory containing this module and execute the following
+##  commands to build the resultant file:
+##
+##  'sudo rake pkg'  ==>  Builds a Package
+##  'sudo rake dmg'  ==>  Builds a DMG
+##  'sudo rake zip'  ==>  Builds a Zip file
+##
+
+require 'pathname'
+require 'fileutils'
+require 'find'
+require "#{Pathname.pwd.parent.parent}/cart"
+
+task :default => :pkg
+raise "\n==========\nThis Rakefile must run as root\nRun \"sudo rake <task>\"\n==========" unless Process.uid == 0
+
+# Any variables that need to be changed should be done inside the customize
+# method
+def customize
+  # If the PACKAGE_VERSION variable is passed from the command line, then set
+  # @package_version equal to what was passed. Else, use the current version
+  # of puppet
+  if ENV['PACKAGE_VERSION']
+    @package_version = ENV['PACKAGE_VERSION']
+  else
+    @package_version        = '2.7.3'
+  end
+  
+  # Puppet-specific Variables
+  @title                  = "Puppet_Install"
+  @reverse_domain         = "com.puppetlabs"
+  @package_major_version  = @package_version.split('.')[0]
+  @package_minor_version  = @package_version.split('.')[1] + @package_version.split('.')[2]
+  @puppet_file            = "puppet-#{@package_version}"
+  @puppet_url             = "http://downloads.puppetlabs.com/puppet/"
+  @puppet_tarfile         = "#{@puppet_file}.tar.gz"
+end
+
+# The pack method is for adding files to the package's payload. Note that
+# @working_tree['WORK_D'] is the path to the working directory. All files
+# installed into this directory will be copied into the package's payload.
+def pack
+  # Set the variable here so it can grab the contents of @working_tree (which
+  # is set in the make_directory_tree method).
+  @work = "#{@working_tree['WORK_D']}"
+  
+  # Download and unpack the Puppet Source
+  safe_system("curl #{@puppet_url}/#{@puppet_tarfile} -o #{@puppet_tarfile}")
+  safe_system("#{TAR} xzf #{@puppet_tarfile}")
+  
+  # Make all necessary directories
+  FileUtils.mkdir_p("#{@work}/private/etc/puppet/")
+  FileUtils.mkdir_p("#{@work}/usr/bin")
+  FileUtils.mkdir_p("#{@work}/usr/sbin")
+  FileUtils.mkdir_p("#{@work}/usr/share/doc/puppet")
+  FileUtils.mkdir_p("#{@work}/usr/share/man/man5")
+  FileUtils.mkdir_p("#{@work}/usr/share/man/man8")
+  FileUtils.mkdir_p("#{@work}/Library/Ruby/Site/1.8/puppet")
+  
+  # Install necessary files
+  safe_system("sudo #{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/conf/auth.conf #{@work}/private/etc/puppet/auth.conf")
+  safe_system("#{DITTO} ./#{@puppet_file}/bin/ #{@work}/usr/bin")
+  safe_system("#{DITTO} ./#{@puppet_file}/sbin/ #{@work}/usr/sbin")
+  safe_system("#{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/man/man5/puppet.conf.5 #{@work}/usr/share/man/man5/")
+  safe_system("#{DITTO} ./#{@puppet_file}/man/man8/ #{@work}/usr/share/man/man8")
+  safe_system("#{DITTO} ./#{@puppet_file}/lib/ #{@work}/Library/Ruby/Site/1.8/")
+  
+  # Setup a preflight script and replace variables in the files with 
+  # the correct paths.
+  safe_system("sudo #{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/conf/osx/preflight #{@working_tree['SCRIPT_D']}")
+  safe_system("sed -i '' \"s\#{SITELIBDIR}\#/usr/lib/ruby/site_ruby/1.8\#g\" #{@working_tree['SCRIPT_D']}/preflight")
+  safe_system("sed -i '' \"s\#{BINDIR}\#/usr/bin\#g\" #{@working_tree['SCRIPT_D']}/preflight")
+   
+  # Install documentation (matching for files with capital letters)
+  Dir.foreach("./#{@puppet_file}") do |file|
+    safe_system("#{INSTALL} -o root -g wheel -m 644 ./#{@puppet_file}/#{file} #{@work}/usr/share/doc/puppet") if file =~ /^[A-Z][A-Z]/
+  end
+
+  # Set Permissions
+  FileUtils.chmod_R(0755, "#{@work}/usr/bin")
+  FileUtils.chown_R('root', 'wheel', "#{@work}/usr/bin")
+  FileUtils.chmod_R(0755, "#{@work}/usr/sbin")
+  FileUtils.chown_R('root', 'wheel', "#{@work}/usr/sbin")
+  FileUtils.chmod_R(0755, "#{@work}/usr/share/man/man8")
+  FileUtils.chown_R('root', 'wheel', "#{@work}/usr/share/man/man8")
+  FileUtils.chmod_R(0644, "#{@work}/Library/Ruby/Site/1.8/")
+  FileUtils.chown_R('root', 'wheel', "#{@work}/Library/Ruby/Site/1.8/")
+  Find.find("#{@work}/Library/Ruby/Site/1.8/") do |dir|
+    FileUtils.chmod(0755, dir) if File.directory?(dir)
+  end
+end
+
+
+### Nothing Below this line should need to be modified ###
+
+
+desc "This task will create an Apple .pkg file"
+task :pkg do
+  customize
+  make_directory_tree
+  pack
+  output_file
+  build_package
+  copy_to_local_dir(@package_file)
+  announce("Your package #{@package_file} has been built!")
+end
+
+desc "This task will create an Apple .pkg encapsulated into a .dmg file"
+task :dmg do
+  customize
+  make_directory_tree
+  pack
+  output_file
+  build_dmg
+	announce("Your package #{@dmg_file} has been built!")
+end
+
+desc "This task will create a .zip file with your package in it."
+task :zip do
+  customize
+  make_directory_tree
+  pack
+  output_file
+  build_zip
+  announce("Your package #{@zip_file} has been built!")
+end
