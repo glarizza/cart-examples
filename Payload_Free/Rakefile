@@ -44,6 +44,7 @@ end
 def pack
   #Throw the postflight script into the Scripts directory
   safe_system("sudo #{INSTALL} -m 0755 postflight #{@working_tree['SCRIPT_D']}")
+  safe_system("sudo #{INSTALL} -m 0755 Welcome.txt #{@working_tree['RESOURCE_D']}")
 end
 
 
